@@ -20,7 +20,7 @@ my $req_file = $ARGV[0];
 
 open my $requirements, '<', $req_file or die "Can't open file: $req_file\n";
 open my $rpms, '>', $RPM_FILE or die "Can't open $RPM_FILE file\n";
-open my $new_reqs, '>', $RPM_FILE or die "Can't open $REQ_FILE file\n";
+open my $new_reqs, '>', $REQ_FILE or die "Can't open $REQ_FILE file\n";
 
 print $rpms "dnf install -y ";
 
