@@ -1,0 +1,83 @@
+# Nextcloud utilites functions
+
+
+# Get the current nextcloud version
+function check_version {
+    echo $(grep -Po "OC_VersionString = '\K.*(?=')" ../${PROD_DIR}/version.php)
+}
+
+# Print the Nextcloud version as number
+function semver_to_number {
+    printf "%03d%03d%03d%03d" $(echo "$1" | tr '.' ' ')
+}
+
+# Load configuration directives from the nextcloud configuration file
+function load_nextcloud_config {
+    echo "Loading nextcloud config.php"
+    $(eval ./get_config.php)
+    echo "Done"
+}
+
+# Create database backup
+function backup_database {
+    if [[ ${DBUSER} == "" || ${DBPASSWORD} == "" || ${DBHOST} == "" ||
+        ${DBNAME} == "" ]]; then
+        echo "Missing database configuration, please run source 'load_nextcloud_config'"
+        exit
+    fi
+
+    DATABASE_URL="postgres://${DBUSER}:${DBPASSWORD}@${DBHOST}:${DBPORT}/${DBNAME}"
+    pg_dump $DATABASE_URL > "../${BACKUP_ID}/nextcloud_${BACKUP_ID}.dump"
+}
+
+# Get the apps particular to this nextcloud installation
+function get_installed_apps() {
+    CURRENT=$1
+    UPSTREAM=$2
+    ls -1 ../${CURRENT}/apps/ | sort > installed_apps.txt
+    ls -1 ../${UPSTREAM}/apps/ | sort > upstream_apps.txt
+    OUTPUT=$(diff --unchanged-line-format="" --old-line-format="" \
+        --new-line-format="%L" \
+        installed_apps.txt upstream_apps.txt)
+    rm installed_apps.txt upstream_apps.txt
+    echo $OUTPUT
+}
+
+# Upgrade nextcloud using cc
+function occ_upgrade {
+    echo "Executing occ upgrade"
+    pushd ../$PROD_DIR
+    chown nginx -R config
+    sudo -E -u $WWW_USER php occ upgrade
+    chown root -R config
+    popd
+}
+
+# Set maintenance mode, if $1 == off sets to --off, --on for any other argument
+function set_maintenance {
+    MAINTENANCE="--on"
+    if [[ ${1} == "off" ]]; then
+        MAINTENANCE="--off"
+    fi
+
+    pushd ../${PROD_DIR}
+    chown nginx -R config
+    echo "Setting Nextcloud maintenance mode to: ${MAINTENANCE}"
+    sudo -E -u $WWW_USER php occ maintenance:mode $MAINTENANCE
+    chown root -R config
+    popd
+}
+
+# Change the read_only setting for config.php, if $1 != false defaults to true
+function set_config_read_only_status {
+    STATUS= "true"
+    if [[ ${1} == "false" ]]; then
+        STATUS=$1
+    fi
+
+    pushd ../${PROD_DIR}
+    sed -i \
+        -e "s/'config_is_read_only' => ${CONFIG_IS_READ_ONLY}/'config_is_read_only' => ${STATUS}/" \
+        config/config.php
+    popd
+ }
